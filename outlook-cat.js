@@ -87,17 +87,17 @@
       const id = r.getAttribute("data-convid");
       const st = getState(id);
       if (st === "working") return;
-      if (st === "done" && !e.shiftKey) { copyCaptured(id); return; }   // green: copy what was captured
+      if (st === "done" && !e.shiftKey) { copyCaptured(id); return; }   // green: copy the AI prompt built from what was captured
       setState(id, "working");
       enqueue(() => readEmail(id));
     }, true);
     return b;
   }
-  const READ_TEXT = { idle: "\u{1F4E5} Read", working: "\u23F3 Reading...", done: "\u2714 Read", fail: "\u26A0 Retry" };
+  const READ_TEXT = { idle: "\u{1F4E5} Read", working: "\u23F3 Reading...", done: "\u{1F4CB} Prompt", fail: "\u26A0 Retry" };
   const READ_TITLE = {
     idle: "Read this email's content (orange = not read yet)",
     working: "Getting the content of this email...",
-    done: "Content saved. Click = copy it, Shift+click = read again",
+    done: "Content saved. Click = copy the AI prompt (edit it in the extension settings), Shift+click = read again",
     fail: "Couldn't read it - click to try again"
   };
   function rowHasTag(row, name) {
@@ -380,11 +380,13 @@
       const d = await chrome.storage.local.get("outlookEmails");
       const r = (d.outlookEmails || {})[id];
       if (!r) { captured.delete(id); setState(id, "idle"); toast("Nothing saved for this email - click Read again", true); return; }
-      const text = `Subject: ${r.subject}\nFrom: ${r.from}\nReceived: ${r.receivedAt}\nCategory: ${r.category}\n\n${r.body}` +
-        (r.links && r.links.length ? "\n\nLinks:\n" + r.links.map(l => `- ${l.text || "(no text)"}: ${l.href}`).join("\n") : "");
+      const P = await getPrompts();
+      const M = await getMask();
+      const out = buildPrompt(P.presets[P.active], r, await getNotes(), M);
+      const text = out.text;
       try { await navigator.clipboard.writeText(text); }
       catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
-      toast(`Copied ${r.body.length} characters`);
+      toast(`Copied prompt "${P.active}" (${text.length} characters, ` + (M.enabled ? `${out.masked} item(s) masked)` : "masking is OFF)"));
     } catch (e) { toast("Couldn't copy: " + (e.message || e), true); }
   }
 

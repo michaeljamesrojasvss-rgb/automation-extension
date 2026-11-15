@@ -51,9 +51,17 @@ async function olLoad() {
   const d = await chrome.storage.local.get(["outlookCat", "popupMode"]);
   OL = Object.assign({ enabled: true, readBtn: true, active: "", list: [] }, d.outlookCat || {});
   if (!Array.isArray(OL.list)) OL.list = [];
-  olRender();
+  olRender(); promptRender();
   setMode(["WO", "OL", "CB"].includes(d.popupMode) ? d.popupMode : "WO", false);
 }
+async function promptRender() {
+  const P = await getPrompts(), sel = $("olPrompt"); sel.innerHTML = "";
+  for (const name of Object.keys(P.presets)) { const o = document.createElement("option"); o.value = name; o.textContent = name; if (name === P.active) o.selected = true; sel.appendChild(o); }
+  $("olMask").checked = (await getMask()).enabled;
+}
+$("olMask").onchange = async () => { const M = await getMask(); M.enabled = $("olMask").checked; await saveMask(M); };
+$("olPrompt").onchange = async () => { const P = await getPrompts(); P.active = $("olPrompt").value; await savePrompts(P); };
+$("olPromptEdit").onclick = () => { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#prompt") }); window.close(); };
 const olSave = () => chrome.storage.local.set({ outlookCat: OL });
 function olRender() {
   $("olOn").checked = !!OL.enabled;

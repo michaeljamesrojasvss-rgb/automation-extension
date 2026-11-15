@@ -52,7 +52,9 @@
   <input id="olNew" type="text" placeholder="e.g. John Doe"> <button id="olAdd">Add</button>
   <br><button id="olDel">Remove selected from my list</button>
   <hr>
-  <label><input id="olReadOn" type="checkbox" checked> Show an orange <b>Read</b> button on emails that have this category</label>
+  <label><input id="olReadOn" type="checkbox" checked> Show an orange <b>Read</b> button on emails that have this category (after reading, it copies the AI prompt)</label>
+  <label><input id="olMask" type="checkbox" checked> Mask private data in the email (phones, emails, customer numbers...) when copying</label>
+  <label>Prompt: <select id="olPrompt"></select> <a id="olPromptEdit">Edit prompt / notes...</a></label>
   <button id="olCopyAll">Copy all saved emails (JSON)</button> <button id="olClear">Clear saved emails</button>
   <div class="small" id="olCount" style="margin-top:4px"></div>
   <div class="small" style="margin-top:8px">The button only ADDS the category (it never removes others). It types the name into Outlook's category search, so it also works for categories that aren't in the recent list. Refresh the Outlook tab once after installing or updating the extension.</div>
@@ -74,6 +76,7 @@
   <div class="small" style="margin-top:6px">Only tabs in the "WO Checker - Copilot" group are used, so your own Copilot tab is left alone. Other parts of this extension call it with <code>CopilotBridge.ask(prompt)</code> (see bridge/README.md).</div>
 </div>
   <script src="settings.js"></script>
+  <script src="prompt.js"></script>
   <script src="bridge/client.js"></script>
   <script src="popup.js"></script>
   <script src="bridge/popup-bridge.js"></script>

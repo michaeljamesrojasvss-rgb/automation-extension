@@ -15,8 +15,24 @@
   li button{border:none;background:none;color:#b00;font-size:16px;cursor:pointer}
   #dirty{color:#b36b00;font-weight:bold;margin-left:8px}
   #flash{color:#2a7a2a;margin-left:8px}
+  [hidden]{display:none!important}
+  .top{margin-bottom:14px}
+  .top button{padding:7px 16px;border:1px solid #0f548c;background:#fff;color:#0f548c;cursor:pointer;margin-right:4px;border-radius:4px}
+  .top button.on{background:#0f548c;color:#fff}
+  #ptext,#ntext{width:100%;box-sizing:border-box;font:13px/1.45 Consolas,monospace;padding:8px}
+  #ptext{height:260px}
+  #ntext{height:360px}
+  h3{margin:22px 0 4px}
+  .mta{width:100%;box-sizing:border-box;height:80px;font:13px/1.45 Consolas,monospace;padding:6px}
+  #mrules label{display:block;margin:3px 0}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .chips button{font:12px Consolas,monospace;padding:2px 8px;cursor:pointer}
+  #pdirty{color:#b36b00;font-weight:bold;margin-left:8px}
+  #pflash{color:#2a7a2a;margin-left:8px}
 </style></head>
 <body>
+  <div class="top"><button id="topStatus" class="on">Status lists</button><button id="topPrompt">Email AI prompt</button></div>
+  <div id="viewStatus">
   <h2>Status lists</h2>
   <div class="tabs" id="tabs"></div>
   <div class="panel">
@@ -35,6 +51,43 @@
       <button class="act" id="add">Add</button>
     </div>
   </div>
+  </div>
+  <div id="viewPrompt" hidden>
+    <h2>Email AI prompt</h2>
+    <p class="help">This is what the orange/green button on an Outlook email copies. Write your instructions and notes anywhere in it and put the
+      placeholder where the email should go. Click a placeholder below to insert it at the cursor. If no email placeholder is in the text, the email is added at the end.</p>
+    <div class="row">
+      <label>Preset: <select id="ppreset"></select></label>
+      <button class="act" id="psave">Save</button>
+      <button class="act" id="psaveNew">Save as new preset...</button>
+      <button class="act" id="pdel">Delete preset</button>
+      <button class="act" id="preset0">Restore built-in default</button>
+      <span id="pdirty"></span><span id="pflash"></span>
+    </div>
+    <div class="chips" id="pchips"></div>
+    <textarea id="ptext" spellcheck="false"></textarea>
+    <h3>Notes</h3>
+    <p class="help">Your long context. It is not copied by itself: it goes wherever the prompt above has <code>{{notes}}</code>, and every prompt preset shares this one box.</p>
+    <div class="row"><button class="act" id="nsave">Save notes</button><span id="ndirty" style="color:#b36b00;font-weight:bold"></span><span id="nflash" style="color:#2a7a2a"></span></div>
+    <textarea id="ntext" spellcheck="false" placeholder="Paste your bulleted notes here..."></textarea>
+    <h3>Masking private data</h3>
+    <p class="help">Applied only to the email (subject, sender, body, links) right before copying; your prompt and notes are never touched. It finds patterns, so names and
+      oddly written addresses can still slip through: add those below, and read the result before sending it anywhere.</p>
+    <label><input type="checkbox" id="menabled"> Mask private data when copying the prompt</label>
+    <div id="mrules"></div>
+    <div class="row"><label>Plain digit strings are masked from <input type="number" id="mmin" min="6" max="30" style="width:60px"> digits (WO numbers are usually shorter; labeled ones like "WO 123456789" are always kept)</label></div>
+    <p class="help" style="margin-bottom:2px">Always mask these words or names, one per line. Optional custom label: <code>John Smith =&gt; [customer name]</code></p>
+    <textarea id="mwords" spellcheck="false" class="mta"></textarea>
+    <p class="help" style="margin:8px 0 2px">Never mask anything matching these patterns (regular expressions, one per line; checked first):</p>
+    <textarea id="mkeep" spellcheck="false" class="mta"></textarea>
+    <div class="row"><button class="act" id="msave">Save masking</button><button class="act" id="mreset">Restore masking defaults</button><span id="mdirty" style="color:#b36b00;font-weight:bold"></span><span id="mflash" style="color:#2a7a2a"></span></div>
+    <p class="help" style="margin:10px 0 2px">Test it (uses the settings above even if unsaved):</p>
+    <textarea id="mtest" spellcheck="false" class="mta" style="height:110px"></textarea>
+    <div class="row"><button class="act" id="mrun">Mask this text</button><span id="mcount"></span></div>
+    <pre id="mout" style="white-space:pre-wrap;background:#f4f4f4;padding:8px;border:1px solid #ddd;min-height:40px"></pre>
+  </div>
   <script src="settings.js"></script>
+  <script src="prompt.js"></script>
   <script src="options.js"></script>
+  <script src="options-prompt.js"></script>
 </body></html>
