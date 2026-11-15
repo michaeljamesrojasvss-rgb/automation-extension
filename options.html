@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>WO Status Checker - Settings</title>
+<style>
+  body{font:14px system-ui,sans-serif;margin:24px;max-width:760px}
+  .tabs button{padding:6px 14px;border:1px solid #bbb;background:#f4f4f4;cursor:pointer;margin-right:4px}
+  .tabs button.on{background:#fff;border-bottom-color:#fff;font-weight:bold}
+  .panel{border:1px solid #bbb;padding:16px;margin-top:-1px}
+  .help{color:#555;font-size:12.5px;margin:0 0 12px}
+  .row{display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap}
+  select,input[type=text]{padding:5px;font:inherit}
+  input[type=text]{flex:1;min-width:240px}
+  button.act{padding:5px 12px;cursor:pointer}
+  ul{list-style:none;padding:0;margin:8px 0}
+  li{display:flex;justify-content:space-between;align-items:center;border:1px solid #ddd;border-radius:4px;padding:5px 10px;margin:4px 0;background:#fafafa}
+  li button{border:none;background:none;color:#b00;font-size:16px;cursor:pointer}
+  #dirty{color:#b36b00;font-weight:bold;margin-left:8px}
+  #flash{color:#2a7a2a;margin-left:8px}
+</style></head>
+<body>
+  <h2>Status lists</h2>
+  <div class="tabs" id="tabs"></div>
+  <div class="panel">
+    <p class="help" id="help"></p>
+    <div class="row">
+      <label>Preset: <select id="preset"></select></label>
+      <button class="act" id="save">Save</button>
+      <button class="act" id="saveNew">Save as new preset...</button>
+      <button class="act" id="del">Delete preset</button>
+      <button class="act" id="reset">Restore built-in default</button>
+      <span id="dirty"></span><span id="flash"></span>
+    </div>
+    <ul id="list"></ul>
+    <div class="row">
+      <input type="text" id="newItem" placeholder="Add a status, then press Enter">
+      <button class="act" id="add">Add</button>
+    </div>
+  </div>
+  <script src="settings.js"></script>
+  <script src="options.js"></script>
+</body></html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>WO Status Checker - run from Excel file</title>
+<style>
+  body{font:14px system-ui,sans-serif;margin:24px;max-width:720px}
+  h3{margin:0 0 12px}
+  label{display:block;margin:7px 0}
+  select{max-width:360px;padding:3px}
+  input[type=number]{width:90px}
+  .small{color:#666;font-size:12px;margin:0 0 4px 2px}
+  button{margin-top:10px;padding:7px 18px;cursor:pointer}
+  button:disabled{cursor:default}
+  fieldset{border:1px solid #ccc;margin:12px 0;padding:8px 14px 12px}
+  legend{font-weight:600;padding:0 6px}
+  #preview{margin-top:8px;padding:8px 10px;background:#f3f6fb;border:1px solid #d5deee;min-height:20px}
+  #msg{margin-top:8px;color:#b00}
+  .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+</style></head>
+<body>
+  <h3>Run from an Excel file (.xlsx)</h3>
+  <p class="small">Reads the WO ids and the current fill color of each WO cell from your sheet (hidden/filtered rows included). Nothing is written back to the file. When the run finishes, the results page shows a "Changes vs file" report.</p>
+
+  <fieldset><legend>1. The file</legend>
+    <input type="file" id="file" accept=".xlsx">
+    <label>Column with the WO ids: <select id="col" disabled></select></label>
+    <div class="row">
+      <label>From sheet row: <input type="number" id="from" min="2" placeholder="first"></label>
+      <label>To sheet row: <input type="number" id="to" min="2" placeholder="last"></label>
+    </div>
+    <div class="small">Row numbers as you see them in the sheet (row 1 is the header). Leave both empty for the full list.</div>
+    <div id="preview">Choose a file to see how many WOs it contains.</div>
+  </fieldset>
+
+  <fieldset><legend>2. How to check</legend>
+    <label>Check first on:
+      <select id="source"><option value="SC">ServiceChannel</option><option value="DT">Dollar Tree (OfficeTrax)</option></select>
+    </label>
+    <label>Status list: <select id="preset"></select></label>
+    <div class="small" id="presetPreview"></div>
+    <label>Salesforce done list: <select id="sfpreset"></select></label>
+    <div class="small" id="sfpreview"></div>
+    <label>Parallel tabs: <input id="tabs" type="number" min="1" max="10" value="3"></label>
+    <label>Wait after Salesforce loads (s): <input id="settle" type="number" min="0" max="30" step="0.5" value="1.5"></label>
+    <label><input id="confirm" type="checkbox" checked> Double-check FALSE results (safer, slower)</label>
+    <label><input id="sfall" type="checkbox" checked> Also check Salesforce when the portal status doesn't match (slower)</label>
+    <label><input id="sfany" type="checkbox" checked> Salesforce with several cases: OK if any one case is in a done status (extra cases are usually cancelled duplicates)</label>
+    <label><input id="win" type="checkbox"> Use small separate windows instead of tabs</label>
+  </fieldset>
+
+  <button id="run" disabled>Run</button>
+  <div id="msg"></div>
+  <script src="settings.js"></script>
+  <script src="xlsx.js"></script>
+  <script src="start.js"></script>
+</body></html>

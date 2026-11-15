@@ -1,0 +1,80 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body{font:13px system-ui,sans-serif;width:380px;margin:12px}
+  textarea{width:100%;height:140px;box-sizing:border-box}
+  input[type=number]{width:60px}
+  select{max-width:210px}
+  label{display:block;margin:5px 0}
+  .small{color:#666;font-size:11.5px;margin:0 0 4px 2px}
+  button{margin-top:8px;padding:6px 14px;cursor:pointer}
+  a{color:#06c;cursor:pointer;font-size:12px}
+  #msg{margin-top:8px;color:#b00}
+  [hidden]{display:none!important}
+  .cb-ready{color:#107c10;font-weight:600}.cb-busy{color:#b36b00;font-weight:600}.cb-resetting{color:#0f548c}.cb-init{color:#888}
+  #pane-cb table{width:100%;border-collapse:collapse;font-size:12px} #pane-cb td,#pane-cb th{padding:2px 4px;border-bottom:1px solid #ddd;text-align:left}
+  #cbAnswer{white-space:pre-wrap;background:#f4f4f4;padding:6px;max-height:140px;overflow:auto;margin:4px 0}
+  #cbPrompt{width:100%;box-sizing:border-box;height:56px}
+  .modes{display:flex;gap:4px;margin-bottom:8px}
+  .modes button{flex:1;margin:0;padding:5px;border:1px solid #bbb;background:#f3f3f3}
+  .modes button.on{background:#0f548c;color:#fff;border-color:#0f548c}
+  #olNew{width:190px}
+  #olActive{max-width:260px}
+</style></head>
+<body>
+  <div class="modes"><button id="modeWo" class="on">WO Checker</button><button id="modeOl">Outlook categories</button><button id="modeCb">Copilot pool</button></div>
+<div id="pane-wo">
+  <label>Check first on:
+    <select id="source"><option value="SC">ServiceChannel</option><option value="DT">Dollar Tree (OfficeTrax)</option></select>
+  </label>
+  <label>Status list: <select id="preset"></select></label>
+  <div class="small" id="preview"></div>
+  <label>Salesforce done list: <select id="sfpreset"></select></label>
+  <div class="small" id="sfpreview"></div>
+  <a id="edit">Edit status lists / presets...</a>
+  <a id="xl">Run from an Excel file (.xlsx)...</a>
+  <hr>
+  <label>Parallel tabs: <input id="tabs" type="number" min="1" max="10" value="3"></label>
+  <label>Wait after Salesforce loads (s): <input id="settle" type="number" min="0" max="30" step="0.5" value="1.5"></label>
+  <label><input id="confirm" type="checkbox" checked> Double-check FALSE results (safer, slower)</label>
+  <label><input id="sfall" type="checkbox" checked> Also check Salesforce when the portal status doesn't match (slower, fills the Salesforce column)</label>
+  <label><input id="sfany" type="checkbox" checked> Salesforce with several cases: OK if any one case is in a done status (extra cases are usually cancelled duplicates)</label>
+    <label><input id="win" type="checkbox"> Use small separate windows instead of tabs</label>
+  <p style="margin:8px 0 4px">WO IDs (newline, comma, or space separated):</p>
+  <textarea id="ids"></textarea>
+  <button id="run">Run</button>
+  <div id="msg"></div>
+</div>
+<div id="pane-ol" hidden>
+  <label><input id="olOn" type="checkbox" checked> Show category buttons on emails in Outlook</label>
+  <label>Category the button adds:<br><select id="olActive"></select></label>
+  <p style="margin:8px 0 2px">Add a category name (exactly as in Outlook):</p>
+  <input id="olNew" type="text" placeholder="e.g. John Doe"> <button id="olAdd">Add</button>
+  <br><button id="olDel">Remove selected from my list</button>
+  <hr>
+  <label><input id="olReadOn" type="checkbox" checked> Show an orange <b>Read</b> button on emails that have this category</label>
+  <button id="olCopyAll">Copy all saved emails (JSON)</button> <button id="olClear">Clear saved emails</button>
+  <div class="small" id="olCount" style="margin-top:4px"></div>
+  <div class="small" style="margin-top:8px">The button only ADDS the category (it never removes others). It types the name into Outlook's category search, so it also works for categories that aren't in the recent list. Refresh the Outlook tab once after installing or updating the extension.</div>
+  <div id="olMsg" style="margin-top:6px;color:#b00"></div>
+</div>
+<div id="pane-cb" hidden>
+  <div id="cbSummary" style="font-weight:600;margin-bottom:4px"></div>
+  <label><input id="cbOn" type="checkbox"> Turn the Copilot pool on (opens and maintains the tabs)</label>
+  <div style="margin:4px 0">Tabs <input id="cbSize" type="number" min="1" max="10" style="width:50px"></div>
+  <div style="margin:4px 0"><button id="cbOpen">Open / repair pool</button> <button id="cbAdopt">Use this tab as a worker</button> <button id="cbClose">Close pool tabs</button></div>
+  <input id="cbUrl" type="text" style="width:100%;box-sizing:border-box" placeholder="Copilot URL">
+  <table id="cbWorkers"></table>
+  <div class="small" id="cbStats"></div>
+  <div style="margin-top:8px"><b>Test</b></div>
+  <textarea id="cbPrompt">Reply with exactly: pong</textarea>
+  <div><button id="cbAsk">Ask</button> <span class="small" id="cbTiming"></span></div>
+  <div id="cbAnswer"></div>
+  <div style="margin-top:6px"><button id="cbLogs">Copy debug log</button> <span class="small" id="cbMsg"></span></div>
+  <div class="small" style="margin-top:6px">Only tabs in the "WO Checker - Copilot" group are used, so your own Copilot tab is left alone. Other parts of this extension call it with <code>CopilotBridge.ask(prompt)</code> (see bridge/README.md).</div>
+</div>
+  <script src="settings.js"></script>
+  <script src="bridge/client.js"></script>
+  <script src="popup.js"></script>
+  <script src="bridge/popup-bridge.js"></script>
+</body></html>

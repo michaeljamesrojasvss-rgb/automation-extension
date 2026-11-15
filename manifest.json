@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "WO Status Checker",
+  "version": "3.0",
+  "description": "Checks WO IDs in ServiceChannel then Salesforce; one-click category/read buttons for the Outlook shared inbox; and a Copilot-tab pool that other features can use as an AI API.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "tabGroups",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://www.servicechannel.com/*",
+    "https://*.officetrax.com/*",
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://copilot.cloud.microsoft/*",
+    "https://m365.cloud.microsoft/chat*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WO Status Checker"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://outlook.cloud.microsoft/*",
+        "https://outlook.office.com/*",
+        "https://outlook.office365.com/*"
+      ],
+      "js": [
+        "outlook-cat.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://copilot.cloud.microsoft/*",
+        "https://m365.cloud.microsoft/chat*"
+      ],
+      "js": [
+        "bridge/worker.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
