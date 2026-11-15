@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WO Status Checker",
-  "version": "3.1",
+  "version": "3.2",
   "description": "Checks WO IDs in ServiceChannel then Salesforce; one-click category/read buttons for the Outlook shared inbox; and a Copilot-tab pool that other features can use as an AI API.",
   "permissions": [
     "tabs",
@@ -39,6 +39,8 @@
       ],
       "js": [
         "prompt.js",
+        "md.js",
+        "bridge/client.js",
         "outlook-cat.js"
       ],
       "run_at": "document_idle"
