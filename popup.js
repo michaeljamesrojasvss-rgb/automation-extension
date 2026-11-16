@@ -104,7 +104,8 @@ $("olReadOn").onchange = async () => { OL.readBtn = $("olReadOn").checked; await
 async function olCount() {
   const d = await chrome.storage.local.get("outlookEmails");
   const n = Object.keys(d.outlookEmails || {}).length;
-  $("olCount").textContent = n ? `${n} email(s) saved` : "No emails saved yet";
+  const a = Object.keys((await chrome.storage.local.get("outlookAnswers")).outlookAnswers || {}).length;
+  $("olCount").textContent = n || a ? `${n} email(s) saved, ${a} AI answer(s) saved` : "No emails or AI answers saved yet";
 }
 $("olCopyAll").onclick = async () => {
   const d = await chrome.storage.local.get("outlookEmails");
@@ -114,7 +115,7 @@ $("olCopyAll").onclick = async () => {
   $("olMsg").textContent = `Copied ${all.length} email(s) as JSON.`;
 };
 $("olClear").onclick = async () => {
-  if (!confirm("Delete all saved email contents?")) return;
-  await chrome.storage.local.remove("outlookEmails"); olCount(); $("olMsg").textContent = "Cleared.";
+  if (!confirm("Delete all saved email contents and AI answers? The buttons will go back to \"Read\".")) return;
+  await chrome.storage.local.remove(["outlookEmails", "outlookAnswers"]); olCount(); $("olMsg").textContent = "Cleared.";
 };
 olLoad();

@@ -75,6 +75,22 @@ const activate = tab => {
   chrome.tabs.sendMessage(tab.id, { cb: "activate" }).catch(() => {});
 };
 
+// If more than one group carries our title (the "lots of WO Checker - Copilot groups" problem), fold them into one;
+// the "too many" branch in ensurePool then closes the surplus tabs.
+async function mergeGroups() {
+  let groups = [];
+  try { groups = await chrome.tabGroups.query({ title: GROUP_TITLE }); } catch { return; }
+  if (groups.length < 2) return;
+  const [keep, ...rest] = groups;
+  for (const g of rest) {
+    try {
+      const ts = await chrome.tabs.query({ groupId: g.id });
+      if (ts.length) await chrome.tabs.group({ tabIds: ts.map(t => t.id), groupId: keep.id });
+      log("bg", "merged duplicate pool group", g.id);
+    } catch (e) { log("bg", "merge group failed", e && e.message); }
+  }
+}
+
 let ensuring = null;
 function ensurePool() {
   if (ensuring) return ensuring;
@@ -83,6 +99,7 @@ function ensurePool() {
       await settingsReady;
       if (!S.cbEnabled) return;
       const size = Math.max(1, Math.min(10, Number(S.cbPoolSize) || 1));
+      await mergeGroups();
       const tabs = await poolTabs();
       const need = size - tabs.length;
       if (need > 0) {
@@ -98,7 +115,11 @@ function ensurePool() {
           chrome.tabs.update(t.id, { autoDiscardable: false }).catch(() => {});
         }
         const gid = await chrome.tabs.group(existing ? { tabIds: ids, groupId: existing.id } : { tabIds: ids });
-        await chrome.tabGroups.update(gid, { title: GROUP_TITLE, color: "purple", collapsed: true });
+        // the title is how we recognise pool tabs later, so retry: an untitled group would be ignored and a fresh one made every minute
+        for (let k = 0; k < 3; k++) {
+          try { await chrome.tabGroups.update(gid, { title: GROUP_TITLE, color: "purple", collapsed: true }); break; }
+          catch (e) { if (k === 2) throw e; await new Promise(r => setTimeout(r, 300)); }
+        }
         log("bg", "opened pool tabs", ids.join(","));
       } else if (need < 0) {
         // too many: close idle, non-adopted ones first
@@ -126,14 +147,36 @@ chrome.tabs.onRemoved.addListener(tabId => {
   if (adopted.delete(tabId)) saveAdopted();
   setTimeout(ensurePool, 600);
 });
+// After the extension is reloaded/updated, Copilot tabs that were already open keep a dead copy of worker.js (Chrome does not
+// re-inject content scripts into open tabs). They still count as pool tabs, but nothing answers. Reload those once.
+const healed = new Map();   // tabId -> when we last reloaded it
+async function healOrphans() {
+  try {
+    await settingsReady;
+    if (!S.cbEnabled) return;
+    const cand = (await poolTabs()).filter(t => !workers.has(t.id) && !adopted.has(t.id) && t.status === "complete" && !t.discarded
+      && Date.now() - (healed.get(t.id) || 0) > 5 * 60 * 1000);
+    if (!cand.length) return;
+    cand.forEach(activate);                                   // a live worker answers this by reconnecting
+    await new Promise(r => setTimeout(r, 4000));
+    for (const t of cand) {
+      if (workers.has(t.id)) continue;
+      healed.set(t.id, Date.now());
+      log("bg", "pool tab has no live worker, reloading it", t.id);
+      chrome.tabs.reload(t.id).catch(() => {});
+    }
+  } catch (e) { log("bg", "healOrphans failed", e && e.message); }
+}
+
 chrome.alarms.create("cb-tick", { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener(async a => {
   if (a.name !== "cb-tick") return;
   await ensurePool();
   for (const t of await poolTabs()) if (!workers.has(t.id)) activate(t);
+  await healOrphans();
 });
-chrome.runtime.onInstalled.addListener(() => ensurePool());
-chrome.runtime.onStartup.addListener(() => ensurePool());
+chrome.runtime.onInstalled.addListener(() => { ensurePool(); setTimeout(healOrphans, 6000); });
+chrome.runtime.onStartup.addListener(() => { ensurePool(); setTimeout(healOrphans, 6000); });
 ensurePool();
 
 // ---------------------------------------------------------------- jobs

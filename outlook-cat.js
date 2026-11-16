@@ -606,7 +606,11 @@
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== "local") return;
     if (ch.outlookEmails) { captured = new Set(Object.keys(ch.outlookEmails.newValue || {})); refreshButtons(); }
-    if (ch.outlookAnswers) { answers = ch.outlookAnswers.newValue || {}; refreshButtons(); renderPanel(); }
+    if (ch.outlookAnswers) {
+      answers = ch.outlookAnswers.newValue || {};
+      if (!Object.keys(answers).length) { failInfo.clear(); partial.clear(); openId = null; }   // cleared from the popup: forget "failed"/"typing" leftovers too
+      refreshButtons(); renderPanel();
+    }
     if (ch.outlookCat) applyCfg(ch.outlookCat.newValue);
   });
   schedule();
