@@ -473,7 +473,9 @@
     };
   }
   const inList = el => !!(el.closest('[role="listbox"]') || el.closest(ROW_SEL));
-  const hasList = el => !!el.querySelector('[role="listbox"]');
+  // "does this element contain the MESSAGE LIST?" - must not trip on the reading pane's own "file attachments" listbox,
+  // otherwise every email with an attachment fails with "Couldn't find this email in the reading pane"
+  const hasList = el => !!el.querySelector(ROW_SEL);
 
   // Finds the reading pane that is currently showing this email (checks subject, and the received time when strict).
   function locateMessage(info, strict) {
