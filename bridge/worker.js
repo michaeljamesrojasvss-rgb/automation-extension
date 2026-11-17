@@ -118,6 +118,9 @@
       if (n.nodeType !== 1) return "";
       const tag = n.tagName.toLowerCase();
       const kids = () => [...n.childNodes].map(walk).join("");
+      // Copilot renders "- [ ] item" as a real checkbox inside the list item: keep it as "[ ]" / "[x]" text so the helper can redraw it
+      if ((tag === "input" && (n.getAttribute("type") || "").toLowerCase() === "checkbox") || n.getAttribute("role") === "checkbox")
+        return n.checked || n.getAttribute("aria-checked") === "true" ? "[x] " : "[ ] ";
       switch (tag) {
         case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": return "\n\n" + "#".repeat(+tag[1]) + " " + kids().trim() + "\n\n";
         case "p": return "\n\n" + kids().trim() + "\n\n";

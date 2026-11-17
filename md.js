@@ -1,6 +1,8 @@
 // Tiny, safe Markdown -> DOM renderer (no innerHTML, only http(s) links). Used for the AI suggestion panel.
 // mdToDom("## Hi\n- a\n- b") -> DocumentFragment
-function mdToDom(src) {
+// Task items ("- [ ] text" / "- [] text" / "- [x] text") become tickable checkboxes. Pass a Set as `ticks` to remember
+// which items are ticked (keyed by the item text) across redraws; nothing is stored anywhere else.
+function mdToDom(src, ticks) {
   const h = (tag, attrs, ...kids) => {
     const e = document.createElement(tag);
     if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -27,6 +29,17 @@ function mdToDom(src) {
       text = text.slice(best.m.index + best.m[0].length);
     }
     return out;
+  }
+
+  const TASK = /^(?:\[( |x|X)?\]|(\u2610)|(\u2611|\u2612))\s*(\S.*)$/;   // [ ] [] [x] or the symbols \u2610 \u2611
+  function taskLi(tk) {
+    const key = tk[4].trim(), box = h("input", { type: "checkbox", class: "woc-chk" }), txt = h("span", { class: "woc-tt" }, inlineNodes(tk[4]));
+    const li = h("li", { class: "woc-task" }, box, " ", txt);
+    const sync = () => li.classList.toggle("woc-done", box.checked);
+    box.checked = !!(ticks && ticks.has(key)) || /x/i.test(tk[1] || "") || !!tk[3];
+    box.addEventListener("change", () => { if (ticks) { if (box.checked) ticks.add(key); else ticks.delete(key); } sync(); });
+    sync();
+    return li;
   }
 
   const lines = String(src || "").replace(/\r\n?/g, "\n").split("\n");
@@ -77,7 +90,7 @@ function mdToDom(src) {
     if ((m = ITEM.exec(line))) {
       const indent = m[1].replace(/\t/g, "    ").length, tag = /\d/.test(m[2]) ? "ol" : "ul";
       while (list.length && list[list.length - 1].indent > indent) list.pop();
-      const top = list[list.length - 1], li = h("li", null, inlineNodes(m[3]));
+      const top = list[list.length - 1], tk = TASK.exec(m[3]), li = tk ? taskLi(tk) : h("li", null, inlineNodes(m[3]));
       if (!top || indent > top.indent) {
         const el = h(tag); (top ? top.li : root).append(el); el.append(li);
         list.push({ indent, el, li });

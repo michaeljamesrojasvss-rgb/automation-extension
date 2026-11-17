@@ -17,7 +17,11 @@ Below are my notes on what to do based on the types of emails I've handled so fa
 
 Here is the email:
 
-{{email content}}`;
+{{email content}}
+
+After your explanation, finish with a section titled "To-do" containing only the action points I should actually do, as a checklist, one per line, in this exact format:
+- [ ] Upload EML
+- [ ] Chatter AM and OM`;
 
 const PROMPT_PLACEHOLDERS = {
   "email content": "everything below in one block: subject, from, received, category, body and links",

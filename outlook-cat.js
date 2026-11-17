@@ -66,6 +66,8 @@
     #woc-pb blockquote{margin:6px 0;padding:2px 10px;border-left:3px solid #b9c3cf;color:#444}
     #woc-pb table{border-collapse:collapse;margin:8px 0}#woc-pb th,#woc-pb td{border:1px solid #cfd6dd;padding:3px 8px;text-align:left}#woc-pb th{background:#f1f4f7}
     #woc-pb a{color:#0f6cbd}
+    #woc-pb li.woc-task{list-style:none;margin-left:-20px}#woc-pb .woc-chk{margin:0 6px 0 0;vertical-align:middle;cursor:pointer}
+    #woc-pb li.woc-done .woc-tt{text-decoration:line-through;color:#8a8a8a}
     #woc-pb .woc-error{color:#b00020;font-weight:600}#woc-pb .woc-note{color:#666}
     #woc-pb .woc-stream{white-space:pre-wrap;font:13px/1.5 system-ui,Segoe UI,sans-serif;background:none;border:0;padding:0;margin:0;color:#555}
     html.woc-busy .fui-MenuPopover{opacity:0!important;pointer-events:none!important}
@@ -91,6 +93,8 @@
   const partial = new Map();         // convId -> answer text so far while Copilot is still writing
   let captured = new Set();          // convIds whose email content is saved
   let answers = {};                  // convId -> { markdown, text, askedAt, ms, preset, masked, subject }
+  const taskTicks = new Map();       // convId -> Set of ticked to-do items (in memory only, gone on reload or Ask again)
+  const ticksFor = id => { let t = taskTicks.get(id); if (!t) taskTicks.set(id, t = new Set()); return t; };
   let openId = null;                 // convId whose AI panel is open
   const getState = id => states.get(id) || (answers[id] ? "done" : captured.has(id) ? "ask" : "idle");
   function setState(id, st) {
@@ -266,8 +270,8 @@
     const mk = (id, txt, title) => { const b = h("button", null, txt); b.type = "button"; b.id = id; b.title = title; head.append(b); return b; };
     mk("woc-pcopy", "Copy answer", "Copy the answer (keeps the formatting when pasted into Salesforce or an email)").onclick = copyAnswer;
     mk("woc-pprompt", "Copy prompt", "Copy the prompt that was sent (masked), to paste into another AI").onclick = () => openId && copyCaptured(openId);
-    mk("woc-pask", "Ask again", "Ask Copilot again with the saved email").onclick = () => { if (openId && !["reading", "asking"].includes(getState(openId))) pipeline(openId, false); };
-    mk("woc-pstrict", "Strict ask", "Ask Copilot again with EVERYTHING private-looking stripped (links, sender, headers, signatures, numbers...). Use it when an organization policy (data protection) blocked the request").onclick = () => { if (openId && !["reading", "asking"].includes(getState(openId))) pipeline(openId, !captured.has(openId), true); };
+    mk("woc-pask", "Ask again", "Ask Copilot again with the saved email").onclick = () => { if (openId && !["reading", "asking"].includes(getState(openId))) { taskTicks.delete(openId); pipeline(openId, false); } };
+    mk("woc-pstrict", "Strict ask", "Ask Copilot again with EVERYTHING private-looking stripped (links, sender, headers, signatures, numbers...). Use it when an organization policy (data protection) blocked the request").onclick = () => { if (openId && !["reading", "asking"].includes(getState(openId))) { taskTicks.delete(openId); pipeline(openId, !captured.has(openId), true); } };
     mk("woc-pclose", "\u2715", "Close").onclick = () => { openId = null; renderPanel(); refreshButtons(); };
     const body = h("div", "woc-md"); body.id = "woc-pb";
     const foot = h("div"); foot.id = "woc-pf";
@@ -299,13 +303,13 @@
     body.replaceChildren();
     if (busy) {
       const t = partial.get(id);
-      if (t) body.append(mdToDom(t)); else body.append(h("p", "woc-note", st === "reading" ? "Reading the email..." : "Waiting for Copilot..."));
+      if (t) body.append(mdToDom(t, ticksFor(id))); else body.append(h("p", "woc-note", st === "reading" ? "Reading the email..." : "Waiting for Copilot..."));
     } else if (f && !a) {
       body.append(h("p", "woc-error", f.message));
       if (f.code === "blocked") body.append(h("p", "woc-note", "Next step: press \"Strict ask\" above (or the purple Strict retry button on the email)."));
     } else if (a) {
       if (f) body.append(h("p", "woc-error", "The last attempt failed: " + f.message + " (showing the previous answer)"));
-      body.append(mdToDom(a.markdown || a.text || ""));
+      body.append(mdToDom(a.markdown || a.text || "", ticksFor(id)));
     }
     body.dataset.id = id;
     if (busy && partial.get(id)) body.scrollTop = !same || wasNear ? body.scrollHeight : prevTop;
@@ -317,7 +321,8 @@
     const a = openId && answers[openId]; if (!a) return;
     const md = a.markdown || a.text || "";
     try {
-      const tmp = h("div"); tmp.append(mdToDom(md));
+      const tmp = h("div"); tmp.append(mdToDom(md, ticksFor(openId)));
+      tmp.querySelectorAll("input.woc-chk").forEach(b => b.replaceWith(b.checked ? "\u2611 " : "\u2610 "));   // checkboxes paste as plain symbols
       await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([tmp.innerHTML], { type: "text/html" }), "text/plain": new Blob([a.text || md], { type: "text/plain" }) })]);
     } catch {
       try { await navigator.clipboard.writeText(a.text || md); } catch { toast("Couldn't copy the answer", true); return; }
