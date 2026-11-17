@@ -126,6 +126,13 @@ function maskText(text, cfg, tally) {
     if (!w) continue;
     s = s.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), () => lab ? (t.n++, lab) : hit("text"));
   }
+  if (cfg.strict) {   // STRICT mode only (Strict retry button): things the normal rules leave alone
+    s = s.replace(/\b(?:https?:\/\/|www\.)[^\s<>"')\]]+/gi, () => hit("link"));                 // every link, not just the query string
+    s = s.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, () => hit("IP address"));
+    s = s.replace(/[$\u20ac\u00a3]\s?\d[\d,]*(?:\.\d+)?/g, () => hit("amount"));                       // money amounts
+    s = s.replace(/\b(?:password|passcode|passwd|pwd|pin|token|secret|username|user\s*id|login)\b(?:\s*[:=#-]\s*|\s+is\s+)\S+/gi, () => hit("credential"));
+    s = s.replace(/\b[A-Za-z0-9_-]{20,}\b/g, m => /\d/.test(m) && /[A-Za-z]/.test(m) ? hit("code") : m);   // long ids / tokens / GUIDs
+  }
   if (R.email) s = s.replace(/[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi, () => hit("email"));
   if (R.urlparams) s = s.replace(/(https?:\/\/[^\s?#<>"')\]]+)\?[^\s<>"')\]]*/gi, (m, base) => { t.n++; return base + "?[params masked]"; });
   if (R.labeled) s = s.replace(/\b(customer|account|acct|member|client|policy)(\s*(?:(?:number|num|no|id)\b\.?\s*[:#-]?\s*|[:#]\s*))([A-Z0-9][A-Z0-9-]{2,})/gi,
@@ -160,5 +167,65 @@ function maskRecord(r, cfg) {
 // renderPrompt + masking of the email part. Returns { text, masked } (masked = how many items were hidden).
 function buildPrompt(template, r, notes, maskCfg) {
   const { rec, n } = maskRecord(r, maskCfg);
+  return { text: renderPrompt(template, rec, notes), masked: n };
+}
+
+// ---------- STRICT mode: the "Strict retry" button ----------
+// For when Copilot still answers "your organization's policies" (data protection) after normal masking.
+// Ignores the switches on the settings page and removes everything that could look like private data:
+// every link, sender, quoted-reply header lines, disclaimers, signature blocks, greeting names, money, IPs, ids/tokens,
+// every digit run of 6+ and the long tail of the email. Your "never mask" list (work order numbers) and "always mask" words still apply.
+// Your prompt text and Notes are not touched (they are sent on every request, so they are not what changes between a pass and a block).
+const STRICT_BODY_MAX = 6000;
+
+function strictCfg(m) {
+  const rules = {};
+  for (const k of Object.keys(MASK_DEFAULT.rules)) rules[k] = true;
+  return { enabled: true, strict: true, rules, minDigits: 6, words: m && m.words || "", keep: m && typeof m.keep === "string" ? m.keep : MASK_DEFAULT.keep };
+}
+
+function strictPrestrip(body, t) {
+  let s = String(body == null ? "" : body);
+  const drop = re => { s = s.replace(re, () => { t.n++; return ""; }); };
+  drop(/^[ \t>]*(?:from|to|cc|bcc|sent|date|reply-to|subject|importance|attachments?)[ \t]*:.*(?:\r?\n|$)/gim);   // quoted-reply header lines
+  drop(/^.*\bwrote:[ \t]*$(?:\r?\n)?/gim);
+  drop(/^[ \t>-]*original message[ \t-]*$(?:\r?\n)?/gim);
+  drop(/^.*\b(?:confidential|privileged|intended recipient|unsubscribe|do not reply|disclaimer|sent from my|get outlook for)\b.*(?:\r?\n|$)/gim);
+  // signature blocks: a sign-off line plus the short lines right under it
+  const SIGN = /^\s*(?:thanks|thank you|many thanks|thanks again|thx|regards|best regards|kind regards|warm regards|best|sincerely|cheers|respectfully)\s*[,.!]?\s*$/i;
+  const lines = s.split(/\r?\n/), out = [];
+  for (let i = 0; i < lines.length; i++) {
+    out.push(lines[i]);
+    if (!SIGN.test(lines[i])) continue;
+    let k = 0;
+    while (i + 1 < lines.length && k < 5 && lines[i + 1].trim() && lines[i + 1].length < 70) { i++; k++; }
+    if (k) { out.push("[signature removed]"); t.n++; }
+  }
+  s = out.join("\n");
+  // "Hi John," -> "Hi [name],"
+  s = s.replace(/^([ \t]*(?:hi|hello|hey|dear|good\s+(?:morning|afternoon|evening))\b[ \t,]*)([A-Za-z][A-Za-z.' -]{0,39})([,.:!]?)[ \t]*$/gim,
+    (m, a, name, punct) => /^(all|team|everyone|there)$/i.test(name.trim()) ? m : (t.n++, a + "[name]" + punct));
+  return s.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// words of the sender's name (from the "From" field) are hidden wherever they appear: subject, greeting, body
+const STRICT_NAME_SKIP = /^(?:support|team|service|services|store|stores|inc|llc|ltd|corp|company|group|customer|facilities|maintenance|help|desk|reply|noreply|admin|operations|department|dept|center|centre|systems|dollar|tree|the|and)$/i;
+function strictNameMasker(from, t) {
+  const names = String(from || "").replace(/<[^>]*>/g, " ").replace(/[^A-Za-z' -]+/g, " ").split(/[\s-]+/).filter(w => w.length >= 3 && !STRICT_NAME_SKIP.test(w));
+  if (!names.length) return s => s;
+  const re = new RegExp("\\b(?:" + names.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b", "gi");
+  return s => String(s == null ? "" : s).replace(re, () => (t.n++, "[name]"));
+}
+
+function strictRecord(r, m) {
+  const cfg = strictCfg(m), t = { n: 0 }, x = s => maskText(s, cfg, t), nm = strictNameMasker(r.from, t);
+  let body = strictPrestrip(r.body, t);
+  if (body.length > STRICT_BODY_MAX) { body = body.slice(0, STRICT_BODY_MAX).replace(/\s+\S*$/, "") + "\n[...rest of the email trimmed]"; t.n++; }
+  return { rec: Object.assign({}, r, { subject: x(nm(r.subject)), from: "[sender removed]", body: x(nm(body)), links: [] }), n: t.n };
+}
+
+// same shape as buildPrompt: { text, masked }
+function buildStrictPrompt(template, r, notes, maskCfg) {
+  const { rec, n } = strictRecord(r, maskCfg);
   return { text: renderPrompt(template, rec, notes), masked: n };
 }

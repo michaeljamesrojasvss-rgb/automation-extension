@@ -38,7 +38,11 @@
     .woc-read.woc-working{background:#f2c811;border-color:#fff09a;color:#222;cursor:progress}
     .woc-read.woc-done{background:#107c10;border-color:#5fd35f;color:#fff}
     .woc-read.woc-fail{background:#c50f1f;border-color:#ff7b86;color:#fff}
+    .woc-strict{flex:none;background:#8a1c7c;border-color:#d68ad0;color:#fff}
+    .woc-strict:hover{background:#a3279a}
     .woc-ai{flex:none;padding:1px 7px;max-width:none;font-weight:700}
+    .woc-ai.woc-live{background:#e8710a;border-color:#ffa24d;animation:woc-pulse 1.1s ease-in-out infinite}
+    @keyframes woc-pulse{50%{opacity:.45}}
     .woc-ai.woc-has{background:#107c10;border-color:#5fd35f}
     .woc-ai.woc-err{background:#c50f1f;border-color:#ff7b86}
     .woc-ai.woc-open{box-shadow:0 0 0 2px #fff,0 0 0 4px #0f548c}
@@ -145,6 +149,20 @@
     }, true);
     return b;
   }
+  function makeStrictButton(row) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "woc-btn woc-strict";
+    b.textContent = "\u{1F6E1} Strict retry";
+    b.title = "Ask Copilot again with EVERYTHING private-looking stripped: all links, sender, quoted headers, signatures, names in greetings, numbers, amounts, ids. Use it when Copilot says an organization policy (data protection) blocked the request";
+    guard(b);
+    b.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      const id = idOf(b, row), st = getState(id);
+      if (st === "reading" || st === "asking") return;
+      pipeline(id, !captured.has(id), true);
+    }, true);
+    return b;
+  }
   function makeToggle(row) {
     const b = document.createElement("button");
     b.type = "button"; b.className = "woc-btn woc-ai";
@@ -208,13 +226,21 @@
         setText(rb, READ_TEXT[st]); setTitle(rb, READ_TITLE[st]);
       } else if (rb) rb.remove();
 
+      // Strict retry sits right beside the Retry button (only after a failure, and only when the email is already saved)
+      let sb = bar.querySelector(".woc-strict");
+      if (wantRead && getState(id) === "fail" && captured.has(id)) {
+        if (!sb) { sb = makeStrictButton(row); rb.after(sb); }
+      } else if (sb) sb.remove();
+
+      // the arrow is there while Copilot is still writing too, so the answer can be watched live
+      const live = getState(id) === "asking" || getState(id) === "reading";
       let tb = bar.querySelector(".woc-ai");
-      if (wantRead && (answers[id] || failInfo.has(id))) {
+      if (wantRead && (answers[id] || failInfo.has(id) || live)) {
         if (!tb) { tb = makeToggle(row); bar.appendChild(tb); }
-        const open = openId === id, cls = "woc-btn woc-ai " + (failInfo.has(id) && !answers[id] ? "woc-err" : "woc-has") + (open ? " woc-open" : "");
+        const open = openId === id, cls = "woc-btn woc-ai " + (live ? "woc-live" : failInfo.has(id) && !answers[id] ? "woc-err" : "woc-has") + (open ? " woc-open" : "");
         if (tb.className !== cls) tb.className = cls;
         setText(tb, open ? "<" : ">");
-        setTitle(tb, open ? "Hide the AI suggestion" : failInfo.has(id) && !answers[id] ? "Show what went wrong" : "Show the AI suggestion");
+        setTitle(tb, open ? "Hide the AI suggestion" : live ? "Watch Copilot's answer as it is written" : failInfo.has(id) && !answers[id] ? "Show what went wrong" : "Show the AI suggestion");
       } else if (tb) tb.remove();
     }
   }
@@ -230,7 +256,8 @@
 
   // ---------- AI suggestion panel ----------
   const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  let panel = null;
+  let panel = null, liveTimer = 0;
+  function livePanel() { if (!liveTimer) liveTimer = setTimeout(() => { liveTimer = 0; renderPanel(); }, 120); }   // streamed chunks arrive fast: redraw a few times a second
   function ensurePanel() {
     if (panel) return panel;
     panel = h("div"); panel.id = "woc-panel";
@@ -240,6 +267,7 @@
     mk("woc-pcopy", "Copy answer", "Copy the answer (keeps the formatting when pasted into Salesforce or an email)").onclick = copyAnswer;
     mk("woc-pprompt", "Copy prompt", "Copy the prompt that was sent (masked), to paste into another AI").onclick = () => openId && copyCaptured(openId);
     mk("woc-pask", "Ask again", "Ask Copilot again with the saved email").onclick = () => { if (openId && !["reading", "asking"].includes(getState(openId))) pipeline(openId, false); };
+    mk("woc-pstrict", "Strict ask", "Ask Copilot again with EVERYTHING private-looking stripped (links, sender, headers, signatures, numbers...). Use it when an organization policy (data protection) blocked the request").onclick = () => { if (openId && !["reading", "asking"].includes(getState(openId))) pipeline(openId, !captured.has(openId), true); };
     mk("woc-pclose", "\u2715", "Close").onclick = () => { openId = null; renderPanel(); refreshButtons(); };
     const body = h("div", "woc-md"); body.id = "woc-pb";
     const foot = h("div"); foot.id = "woc-pf";
@@ -264,18 +292,25 @@
     p.querySelector("#woc-pcopy").disabled = !a;
     p.querySelector("#woc-pprompt").disabled = !captured.has(id);
     p.querySelector("#woc-pask").disabled = busy || !captured.has(id);
+    p.querySelector("#woc-pstrict").disabled = busy || !captured.has(id);
     const body = p.querySelector("#woc-pb"), foot = p.querySelector("#woc-pf");
+    // rebuilding the body on every streamed chunk must not throw the scroll position away: follow the text while the reader is at the bottom
+    const wasNear = body.scrollHeight - body.scrollTop - body.clientHeight < 48, prevTop = body.scrollTop, same = body.dataset.id === id;
     body.replaceChildren();
     if (busy) {
       const t = partial.get(id);
-      if (t) body.append(h("pre", "woc-stream", t)); else body.append(h("p", "woc-note", st === "reading" ? "Reading the email..." : "Waiting for Copilot..."));
+      if (t) body.append(mdToDom(t)); else body.append(h("p", "woc-note", st === "reading" ? "Reading the email..." : "Waiting for Copilot..."));
     } else if (f && !a) {
       body.append(h("p", "woc-error", f.message));
+      if (f.code === "blocked") body.append(h("p", "woc-note", "Next step: press \"Strict ask\" above (or the purple Strict retry button on the email)."));
     } else if (a) {
       if (f) body.append(h("p", "woc-error", "The last attempt failed: " + f.message + " (showing the previous answer)"));
       body.append(mdToDom(a.markdown || a.text || ""));
     }
-    foot.textContent = a && !busy ? `Answered ${new Date(a.askedAt).toLocaleString()} \u00b7 ${(a.ms / 1000).toFixed(1)}s \u00b7 prompt "${a.preset}" \u00b7 ${a.masked == null ? "?" : a.masked} item(s) masked` : "";
+    body.dataset.id = id;
+    if (busy && partial.get(id)) body.scrollTop = !same || wasNear ? body.scrollHeight : prevTop;
+    else body.scrollTop = same ? prevTop : 0;
+    foot.textContent = busy ? (partial.get(id) ? "Copilot is writing..." : "") : a ? `Answered ${new Date(a.askedAt).toLocaleString()} \u00b7 ${(a.ms / 1000).toFixed(1)}s \u00b7 prompt "${a.preset}" \u00b7 ${a.masked == null ? "?" : a.masked} item(s) masked${a.strict ? " \u00b7 STRICT" : ""}` : "";
     p.classList.add("open");
   }
   async function copyAnswer() {
@@ -304,13 +339,18 @@
     await chrome.storage.local.set({ outlookAnswers: all });
   }
   const BLOCKED = /couldn.?t be fully completed due to your organi[sz]ation|blocked by your organi[sz]ation|organi[sz]ation.?s? polic/i;
-  async function askAI(id, rec) {
+  async function askAI(id, rec, strict) {
     if (typeof CopilotBridge === "undefined") throw new Error("The Copilot bridge isn't loaded - reload the extension and this tab");
     const P = await getPrompts(), M = await getMask();
-    const out = buildPrompt(P.presets[P.active], rec, await getNotes(), M);
+    const out = (strict ? buildStrictPrompt : buildPrompt)(P.presets[P.active], rec, await getNotes(), M);
     let r;
     try {
-      r = await CopilotBridge.ask(out.text, { timeoutMs: 240000, retries: 1, onChunk: t => { partial.set(id, t); if (openId === id) renderPanel(); } });
+      r = await CopilotBridge.ask(out.text, { timeoutMs: 240000, retries: 1, onChunk: t => {
+        const first = !partial.has(id);
+        partial.set(id, t);
+        if (first) { if (!openId) openId = id; schedule(); }   // first words: show the panel (unless another one is open) so the answer can be watched
+        if (openId === id) livePanel();
+      } });
     } catch (e) {
       partial.delete(id);
       if (e.code === "disabled") e.message = "The Copilot pool is off - turn it on in the extension popup (Copilot pool tab). You can still use Copy prompt.";
@@ -321,13 +361,15 @@
     const markdown = (r.markdown || "").trim(), text = (r.text || "").trim();
     if (!markdown && !text) { const e = new Error("Copilot sent back an empty answer - try again"); e.code = "empty"; throw e; }
     if ((text || markdown).length < 500 && BLOCKED.test(text || markdown)) {
-      const e = new Error("Copilot refused because of an organization policy (data protection). Something in the email still trips it: tighten the masking rules in the extension settings, or use Copy prompt with another AI.");
+      const e = new Error(strict
+        ? "Copilot still refused because of an organization policy, even with strict stripping. Use Copy prompt and paste it into another AI, or trim the email text yourself."
+        : "Copilot refused because of an organization policy (data protection). Press Strict retry: it strips links, sender, numbers, signatures and quoted headers. (Or use Copy prompt with another AI.)");
       e.code = "blocked"; throw e;
     }
     failInfo.delete(id);
-    await saveAnswer(id, { markdown: markdown || text, text: text || markdown, askedAt: new Date().toISOString(), ms: r.ms || 0, preset: P.active, masked: M.enabled ? out.masked : null, subject: rec.subject || "" });
+    await saveAnswer(id, { markdown: markdown || text, text: text || markdown, askedAt: new Date().toISOString(), ms: r.ms || 0, preset: P.active, masked: strict || M.enabled ? out.masked : null, strict: !!strict, subject: rec.subject || "" });
   }
-  async function pipeline(id, reread) {
+  async function pipeline(id, reread, strict) {
     failInfo.delete(id); partial.delete(id);
     try {
       let rec = null;
@@ -337,7 +379,7 @@
         rec = await new Promise((res, rej) => enqueue(() => readEmail(id).then(res, rej)));   // Outlook clicks run one at a time...
       }
       setState(id, "asking");
-      await askAI(id, rec);                                                                     // ...Copilot answers run in parallel in the pool
+      await askAI(id, rec, strict);                                                                     // ...Copilot answers run in parallel in the pool
       states.delete(id);
       toast("AI suggestion ready - open it with the arrow");
     } catch (e) {
